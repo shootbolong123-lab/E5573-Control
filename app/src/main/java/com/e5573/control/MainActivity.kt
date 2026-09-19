@@ -34,13 +34,15 @@ class MainActivity : AppCompatActivity() {
             post("/api/dialup/mobile-dataswitch", "<request><dataswitch>0</dataswitch></request>")
         }
         findViewById<Button>(R.id.reboot).setOnClickListener {
-            if (android.app.AlertDialog.Builder(this)
-                    .setTitle("Restart MiFi")
-                    .setMessage("Restart E5573 sekarang?")
-                    .setNegativeButton("Batal", null)
-                    .setPositiveButton("Restart") { _, _ ->
-                        post("/api/device/control", "<request><Control>1</Control></request>")
-                    }.create().show()) {}
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Restart MiFi")
+                .setMessage("Restart E5573 sekarang?")
+                .setNegativeButton("Batal", null)
+                .setPositiveButton("Restart") { _, _ ->
+                    post("/api/device/control", "<request><Control>1</Control></request>")
+                }
+                .create()
+                .show()
         }
         refresh()
     }
@@ -54,17 +56,17 @@ class MainActivity : AppCompatActivity() {
                 val plmn = get("/api/net/current-plmn")
                 val host = get("/api/wlan/host-list")
                 runOnUiThread {
-                    status.text = "● MiFi terjangkau"
-                    signal.text = "Sinyal API: ${extract(sig, "rssi") ?: "—"} dBm"
-                    operator.text = "Operator API: ${extract(plmn, "FullName") ?: extract(plmn, "ShortName") ?: "—"}"
-                    wan.text = "IP/WAN API: ${extract(info, "WanIPAddress") ?: extract(info, "ipaddress") ?: "—"}"
+                    status.text = "MiFi terjangkau"
+                    signal.text = "Sinyal API: ${extract(sig, "rssi") ?: "-"} dBm"
+                    operator.text = "Operator API: ${extract(plmn, "FullName") ?: extract(plmn, "ShortName") ?: "-"}"
+                    wan.text = "IP/WAN API: ${extract(info, "WanIPAddress") ?: extract(info, "IpAddress") ?: "-"}"
                     devices.text = "Perangkat API: ${Regex("<Host>").findAll(host).count()}"
-                    raw.text = "Firmware: ${extract(info, "SoftwareVersion") ?: "—"}\nWebUI: ${extract(info, "WebUIVersion") ?: "—"}"
+                    raw.text = "Firmware: ${extract(info, "SoftwareVersion") ?: "-"} | WEBUI: ${extract(info, "WebUIVersion") ?: "-"}"
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    status.text = "● Tidak dapat terhubung"
-                    raw.text = "Pastikan HP terhubung ke Wi‑Fi E5573 (192.168.8.1).\n${e.message}"
+                    status.text = "Tidak dapat terhubung"
+                    raw.text = "Pastikan HP terhubung ke Wi-Fi E5573 (192.168.8.1).\n${e.message}"
                 }
             }
         }
@@ -74,28 +76,34 @@ class MainActivity : AppCompatActivity() {
         thread {
             try {
                 val result = request(path, "POST", body)
-                runOnUiThread { Toast.makeText(this, "Perintah dikirim", Toast.LENGTH_SHORT).show(); raw.text = result.take(500) }
+                runOnUiThread { Toast.makeText(this, "Perintah dikirim", Toast.LENGTH_SHORT).show(); raw.text = result }
             } catch (e: Exception) {
-                runOnUiThread { Toast.makeText(this, "Gagal: ${e.message}", Toast.LENGTH_LONG).show() }
+                runOnUiThread { Toast.makeText(this, "Gagal: ${e.message}", Toast.LENGTH_SHORT).show() }
             }
         }
     }
 
-    private fun get(path: String) = request(path, "GET", null)
-
-    private fun request(path: String, method: String, body: String?): String {
-        val c = (URL(base + path).openConnection() as HttpURLConnection)
-        c.requestMethod = method
-        c.connectTimeout = 5000
-        c.readTimeout = 5000
-        if (body != null) {
-            c.doOutput = true
-            c.setRequestProperty("Content-Type", "application/xml; charset=UTF-8")
-            c.outputStream.use { it.write(body.toByteArray()) }
-        }
-        return c.inputStream.bufferedReader().use { it.readText() }
+    private fun get(path: String): String {
+        return request(path, "GET", null)
     }
 
-    private fun extract(xml: String, tag: String): String? =
-        Regex("<$tag>(.*?)</$tag>", RegexOption.DOT_MATCHES_ALL).find(xml)?.groupValues?.get(1)
+    private fun request(path: String, method: String, body: String?): String {
+        val url = URL("$base$path")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = method
+        conn.connectTimeout = 3000
+        conn.readTimeout = 3000
+        if (body != null) {
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/xml")
+            conn.outputStream.write(body.toByteArray())
+        }
+        val stream = if (conn.responseCode in 200..299) conn.inputStream else conn.errorStream
+        return stream.bufferedReader().use { it.readText() }
+    }
+
+    private fun extract(xml: String, tag: String): String? {
+        val match = Regex("<$tag>(.*?)</$tag>").find(xml)
+        return match?.groupValues?.get(1)
+    }
 }
