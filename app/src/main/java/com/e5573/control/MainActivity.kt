@@ -49,7 +49,7 @@ class MainActivity : AppCompatActivity() {
                     true
                 }
                 R.id.nav_perangkat -> {
-                    Toast.makeText(this, "Fitur Daftar Perangkat", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Fitur Perangkat Terhubung", Toast.LENGTH_SHORT).show()
                     true
                 }
                 R.id.nav_wifi -> {
@@ -92,7 +92,7 @@ class MainActivity : AppCompatActivity() {
     private fun fetchSesTok() {
         try {
             val xml = request("/api/webserver/SesTokInfo", "GET", null, attachAuth = false)
-            sessionInfo = extract(xml, "SesInfo")
+            sessionInfo = extract(xml, "SesInfo") ?: extract(xml, "TokInfo")
             tokenInfo = extract(xml, "TokInfo")
         } catch (e: Exception) {
             // Abaikan kesalahan awal
@@ -109,19 +109,48 @@ class MainActivity : AppCompatActivity() {
                 val sig = get("/api/device/signal")
                 val plmn = get("/api/net/current-plmn")
                 val host = get("/api/wlan/host-list")
+                val status = get("/api/monitoring/status")
 
-                val rssiVal = extract(sig, "rssi") ?: extract(sig, "rsrp") ?: "-"
-                val opVal = extract(plmn, "FullName") ?: extract(plmn, "ShortName") ?: "TELKOMSEL"
-                val wanVal = extract(info, "WanIPAddress") ?: extract(info, "IpAddress") ?: "-"
-                val devCount = Regex("<Host>").findAll(host).count()
-                val fwVal = extract(info, "SoftwareVersion") ?: "-"
-                val webVal = extract(info, "WebUIVersion") ?: "-"
+                // Extrak Operator
+                val opVal = extract(plmn, "FullName")
+                    ?: extract(plmn, "ShortName")
+                    ?: extract(plmn, "Numeric")
+                    ?: "XL"
+
+                // Extrak Sinyal
+                var rssiRaw = extract(sig, "rssi")
+                    ?: extract(sig, "rsrp")
+                    ?: extract(status, "SignalIcon")
+                    ?: "-"
+                if (rssiRaw != "-" && !rssiRaw.lowercase().contains("dbm")) {
+                    rssiRaw = "$rssiRaw dBm"
+                }
+
+                // Extrak IP WAN
+                val wanVal = extract(info, "WanIPAddress")
+                    ?: extract(info, "WanIpAddress")
+                    ?: extract(info, "ExternalIPAddress")
+                    ?: extract(info, "IpAddress")
+                    ?: extract(status, "WanIPAddress")
+                    ?: "-"
+
+                // Extrak Jumlah Perangkat Terhubung
+                var devCount = Regex("<Host>", RegexOption.IGNORE_CASE).findAll(host).count()
+                if (devCount == 0) {
+                    val countTag = extract(host, "Count") ?: extract(status, "CurrentWifiUser")
+                    if (countTag != null) devCount = countTag.toIntOrNull() ?: 0
+                }
+
+                // Extrak Firmware & WebUI
+                val fwVal = extract(info, "SoftwareVersion") ?: extract(info, "softwareversion") ?: "-"
+                val webVal = extract(info, "WebUIVersion") ?: extract(info, "webuiversion") ?: "-"
 
                 runOnUiThread {
                     tvStatusConnection.text = "Online • 192.168.8.1"
                     tvStatusConnection.setTextColor(Color.parseColor("#4ADE80"))
+
                     tvOperator.text = opVal
-                    tvSignalStrength.text = "Kekuatan Sinyal: $rssiVal dBm"
+                    tvSignalStrength.text = "Kekuatan Sinyal: $rssiRaw"
                     tvIpWan.text = wanVal
                     tvDeviceCount.text = "$devCount Perangkat"
                     tvRawLog.text = "Firmware: $fwVal | WebUI: $webVal"
@@ -187,7 +216,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun extract(xml: String, tag: String): String? {
-        val match = Regex("<$tag>(.*?)</$tag>").find(xml)
-        return match?.groupValues?.get(1)
+        val match = Regex("<$tag>(.*?)</$tag>", RegexOption.IGNORE_CASE).find(xml)
+        val value = match?.groupValues?.get(1)?.trim()
+        return if (value.isNullOrEmpty()) null else value
     }
 }
