@@ -2,6 +2,9 @@ package com.e5573.control
 
 import android.graphics.Color
 import android.os.Bundle
+import android.view.View
+import android.widget.EditText
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -17,6 +20,12 @@ class MainActivity : AppCompatActivity() {
     private var sessionInfo: String? = null
     private var tokenInfo: String? = null
 
+    // Views Utama Tab Beranda
+    private lateinit var viewBeranda: ScrollView
+    private lateinit var viewPerangkat: View
+    private lateinit var viewWifi: View
+    private lateinit var viewLainnya: View
+
     private lateinit var tvStatusConnection: TextView
     private lateinit var tvOperator: TextView
     private lateinit var tvSignalStrength: TextView
@@ -24,9 +33,30 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvDeviceCount: TextView
     private lateinit var tvRawLog: TextView
 
+    // Views Tab Tambahan
+    private lateinit var tvDevicesList: TextView
+    private lateinit var etWifiSsid: EditText
+    private lateinit var etWifiPassword: EditText
+    private lateinit var etUssdCode: EditText
+    private lateinit var tvUssdResult: TextView
+    private lateinit var tvSignalDetails: TextView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        initViews()
+        setupNavigation()
+        setupButtons()
+
+        refreshAllData()
+    }
+
+    private fun initViews() {
+        viewBeranda = findViewById(R.id.view_beranda)
+        viewPerangkat = findViewById(R.id.view_perangkat)
+        viewWifi = findViewById(R.id.view_wifi)
+        viewLainnya = findViewById(R.id.view_lainnya)
 
         tvStatusConnection = findViewById(R.id.tv_status_connection)
         tvOperator = findViewById(R.id.tv_operator)
@@ -35,29 +65,41 @@ class MainActivity : AppCompatActivity() {
         tvDeviceCount = findViewById(R.id.tv_device_count)
         tvRawLog = findViewById(R.id.tv_raw_log)
 
-        setupNavigation()
-        setupButtons()
-        refreshData()
+        tvDevicesList = findViewById(R.id.tv_devices_list)
+        etWifiSsid = findViewById(R.id.et_wifi_ssid)
+        etWifiPassword = findViewById(R.id.et_wifi_password)
+        etUssdCode = findViewById(R.id.et_ussd_code)
+        tvUssdResult = findViewById(R.id.tv_ussd_result)
+        tvSignalDetails = findViewById(R.id.tv_signal_details)
     }
 
     private fun setupNavigation() {
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_navigation)
         bottomNav.setOnItemSelectedListener { item ->
+            viewBeranda.visibility = View.GONE
+            viewPerangkat.visibility = View.GONE
+            viewWifi.visibility = View.GONE
+            viewLainnya.visibility = View.GONE
+
             when (item.itemId) {
                 R.id.nav_beranda -> {
-                    refreshData()
+                    viewBeranda.visibility = View.VISIBLE
+                    refreshAllData()
                     true
                 }
                 R.id.nav_perangkat -> {
-                    Toast.makeText(this, "Fitur Perangkat Terhubung", Toast.LENGTH_SHORT).show()
+                    viewPerangkat.visibility = View.VISIBLE
+                    fetchDevicesList()
                     true
                 }
                 R.id.nav_wifi -> {
-                    Toast.makeText(this, "Fitur Pengaturan Wi-Fi", Toast.LENGTH_SHORT).show()
+                    viewWifi.visibility = View.VISIBLE
+                    fetchWifiSettings()
                     true
                 }
                 R.id.nav_lainnya -> {
-                    Toast.makeText(this, "Fitur Pengaturan Lainnya", Toast.LENGTH_SHORT).show()
+                    viewLainnya.visibility = View.VISIBLE
+                    fetchSignalDetails()
                     true
                 }
                 else -> false
@@ -66,7 +108,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupButtons() {
-        findViewById<MaterialButton>(R.id.btn_refresh).setOnClickListener { refreshData() }
+        findViewById<MaterialButton>(R.id.btn_refresh).setOnClickListener { refreshAllData() }
 
         findViewById<MaterialButton>(R.id.btn_data_on).setOnClickListener {
             post("/api/dialup/mobile-dataswitch", "<request><dataswitch>1</dataswitch></request>")
@@ -87,6 +129,20 @@ class MainActivity : AppCompatActivity() {
                 .create()
                 .show()
         }
+
+        findViewById<MaterialButton>(R.id.btn_save_wifi).setOnClickListener {
+            val ssid = etWifiSsid.text.toString()
+            val pwd = etWifiPassword.text.toString()
+            val body = "<request><WifiSsid>$ssid</WifiSsid><WifiWpaPsk>$pwd</WifiWpaPsk></request>"
+            post("/api/wlan/basic-settings", body)
+        }
+
+        findViewById<MaterialButton>(R.id.btn_send_ussd).setOnClickListener {
+            val code = etUssdCode.text.toString()
+            if (code.isNotEmpty()) {
+                sendUssd(code)
+            }
+        }
     }
 
     private fun fetchSesTok() {
@@ -95,11 +151,11 @@ class MainActivity : AppCompatActivity() {
             sessionInfo = extract(xml, "SesInfo") ?: extract(xml, "TokInfo")
             tokenInfo = extract(xml, "TokInfo")
         } catch (e: Exception) {
-            // Abaikan kesalahan awal
+            // Abaikan kesalahan
         }
     }
 
-    private fun refreshData() {
+    private fun refreshAllData() {
         tvStatusConnection.text = "Menghubungkan ke 192.168.8.1..."
         thread {
             try {
@@ -111,22 +167,12 @@ class MainActivity : AppCompatActivity() {
                 val host = get("/api/wlan/host-list")
                 val status = get("/api/monitoring/status")
 
-                // Extrak Operator
-                val opVal = extract(plmn, "FullName")
-                    ?: extract(plmn, "ShortName")
-                    ?: extract(plmn, "Numeric")
-                    ?: "XL"
-
-                // Extrak Sinyal
-                var rssiRaw = extract(sig, "rssi")
-                    ?: extract(sig, "rsrp")
-                    ?: extract(status, "SignalIcon")
-                    ?: "-"
+                val opVal = extract(plmn, "FullName") ?: extract(plmn, "ShortName") ?: "XL"
+                var rssiRaw = extract(sig, "rssi") ?: extract(sig, "rsrp") ?: extract(status, "SignalIcon") ?: "-"
                 if (rssiRaw != "-" && !rssiRaw.lowercase().contains("dbm")) {
                     rssiRaw = "$rssiRaw dBm"
                 }
 
-                // Extrak IP WAN
                 val wanVal = extract(info, "WanIPAddress")
                     ?: extract(info, "WanIpAddress")
                     ?: extract(info, "ExternalIPAddress")
@@ -134,21 +180,18 @@ class MainActivity : AppCompatActivity() {
                     ?: extract(status, "WanIPAddress")
                     ?: "-"
 
-                // Extrak Jumlah Perangkat Terhubung
                 var devCount = Regex("<Host>", RegexOption.IGNORE_CASE).findAll(host).count()
                 if (devCount == 0) {
                     val countTag = extract(host, "Count") ?: extract(status, "CurrentWifiUser")
                     if (countTag != null) devCount = countTag.toIntOrNull() ?: 0
                 }
 
-                // Extrak Firmware & WebUI
-                val fwVal = extract(info, "SoftwareVersion") ?: extract(info, "softwareversion") ?: "-"
-                val webVal = extract(info, "WebUIVersion") ?: extract(info, "webuiversion") ?: "-"
+                val fwVal = extract(info, "SoftwareVersion") ?: "-"
+                val webVal = extract(info, "WebUIVersion") ?: "-"
 
                 runOnUiThread {
                     tvStatusConnection.text = "Online • 192.168.8.1"
                     tvStatusConnection.setTextColor(Color.parseColor("#4ADE80"))
-
                     tvOperator.text = opVal
                     tvSignalStrength.text = "Kekuatan Sinyal: $rssiRaw"
                     tvIpWan.text = wanVal
@@ -165,13 +208,89 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun fetchDevicesList() {
+        thread {
+            try {
+                fetchSesTok()
+                val host = get("/api/wlan/host-list")
+                val names = Regex("<HostName>(.*?)</HostName>", RegexOption.IGNORE_CASE).findAll(host)
+                    .map { it.groupValues[1] }.joinToString("\n• ")
+                val ips = Regex("<IpAddress>(.*?)</IpAddress>", RegexOption.IGNORE_CASE).findAll(host)
+                    .map { it.groupValues[1] }.toList()
+
+                runOnUiThread {
+                    if (names.isNotEmpty()) {
+                        tvDevicesList.text = "Perangkat Terhubung:\n• $names"
+                    } else {
+                        tvDevicesList.text = "Tidak ada perangkat lain terhubung."
+                    }
+                }
+            } catch (e: Exception) {
+                runOnUiThread { tvDevicesList.text = "Gagal memuat perangkat: ${e.message}" }
+            }
+        }
+    }
+
+    private fun fetchWifiSettings() {
+        thread {
+            try {
+                fetchSesTok()
+                val xml = get("/api/wlan/basic-settings")
+                val ssid = extract(xml, "WifiSsid") ?: ""
+                runOnUiThread {
+                    etWifiSsid.setText(ssid)
+                }
+            } catch (e: Exception) {
+                // Abaikan
+            }
+        }
+    }
+
+    private fun fetchSignalDetails() {
+        thread {
+            try {
+                fetchSesTok()
+                val xml = get("/api/device/signal")
+                val rsrp = extract(xml, "rsrp") ?: "-"
+                val rssi = extract(xml, "rssi") ?: "-"
+                val rsrq = extract(xml, "rsrq") ?: "-"
+                val sinr = extract(xml, "sinr") ?: "-"
+
+                runOnUiThread {
+                    tvSignalDetails.text = "RSRP: $rsrp dBm\nRSSI: $rssi dBm\nRSRQ: $rsrq dB\nSINR: $sinr dB"
+                }
+            } catch (e: Exception) {
+                runOnUiThread { tvSignalDetails.text = "Gagal membaca sinyal detail: ${e.message}" }
+            }
+        }
+    }
+
+    private fun sendUssd(code: String) {
+        tvUssdResult.text = "Sending USSD..."
+        thread {
+            try {
+                fetchSesTok()
+                val body = "<request><content>$code</content><timeout>1</timeout></request>"
+                post("/api/ussd/send", body)
+                Thread.sleep(2000)
+                val response = get("/api/ussd/get")
+                val content = extract(response, "content") ?: response
+                runOnUiThread {
+                    tvUssdResult.text = "Respon USSD:\n$content"
+                }
+            } catch (e: Exception) {
+                runOnUiThread { tvUssdResult.text = "USSD Gagal: ${e.message}" }
+            }
+        }
+    }
+
     private fun post(path: String, body: String) {
         thread {
             try {
                 fetchSesTok()
                 val result = request(path, "POST", body, attachAuth = true)
                 runOnUiThread {
-                    Toast.makeText(this, "Perintah Berhasil Dikirim", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Perintah Dikirim", Toast.LENGTH_SHORT).show()
                     tvRawLog.text = result
                 }
             } catch (e: Exception) {
