@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:background="#07131E" android:fillViewport="true"
+    android:layout_width="match_parent" android:layout_height="match_parent">
+    <LinearLayout android:orientation="vertical" android:padding="18dp"
+        android:layout_width="match_parent" android:layout_height="wrap_content">
+        <TextView android:text="E5573 Control" android:textColor="#FFFFFF"
+            android:textSize="26sp" android:textStyle="bold"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <TextView android:id="@+id/status" android:text="Menghubungkan..."
+            android:textColor="#69F0AE" android:layout_marginTop="4dp"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <TextView android:id="@+id/info" android:text="Huawei E5573Cs-609 • 192.168.8.1"
+            android:textColor="#B8C7D3" android:layout_marginTop="12dp"
+            android:layout_width="match_parent" android:layout_height="wrap_content"/>
+        <TextView android:id="@+id/signal" android:text="Sinyal: —"
+            android:textColor="#FFFFFF" android:textSize="20sp" android:layout_marginTop="20dp"
+            android:layout_width="match_parent" android:layout_height="wrap_content"/>
+        <TextView android:id="@+id/operator" android:text="Operator: —"
+            android:textColor="#B8C7D3" android:layout_marginTop="6dp"
+            android:layout_width="match_parent" android:layout_height="wrap_content"/>
+        <TextView android:id="@+id/wan" android:text="IP WAN: —"
+            android:textColor="#B8C7D3" android:layout_marginTop="6dp"
+            android:layout_width="match_parent" android:layout_height="wrap_content"/>
+        <TextView android:id="@+id/devices" android:text="Perangkat: —"
+            android:textColor="#B8C7D3" android:layout_marginTop="6dp"
+            android:layout_width="match_parent" android:layout_height="wrap_content"/>
+
+        <Button android:id="@+id/dataOn" android:text="📶 Data ON"
+            android:layout_marginTop="22dp" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+        <Button android:id="@+id/dataOff" android:text="📵 Data OFF"
+            android:layout_width="match_parent" android:layout_height="wrap_content"/>
+        <Button android:id="@+id/reboot" android:text="🔄 Restart MiFi"
+            android:layout_width="match_parent" android:layout_height="wrap_content"/>
+        <Button android:id="@+id/refresh" android:text="↻ Segarkan"
+            android:layout_width="match_parent" android:layout_height="wrap_content"/>
+
+        <TextView android:id="@+id/raw" android:text=""
+            android:textColor="#9FB3C1" android:textSize="12sp" android:layout_marginTop="18dp"
+            android:layout_width="match_parent" android:layout_height="wrap_content"/>
+    </LinearLayout>
+</ScrollView>
